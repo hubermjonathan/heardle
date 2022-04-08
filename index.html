@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>heardle - but better</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎧</text></svg>">
+
+    <style>
+        body {
+            padding: 9em;
+            background-color: black;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            font-family: sans-serif;
+        }
+
+        body > * {
+            padding: 0.5em 0;
+        }
+
+        datalist {
+            height: 5em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎧 heardle - but better</h1>
+
+    <div>
+        <span id="display">...</span>
+    </div>
+
+    <div>
+        <span id="guessCounter">⬜️ ⬜️ ⬜️ ⬜️ ⬜️ ⬜️</span>
+    </div>
+
+    <div>
+        <input id="volumeSlider" type="range" min="1" max="100" value="25">
+        <button id="skipButton" disabled>skip +1s</button>
+        <button id="playButton" disabled>play</button>
+    </div>
+
+    <div>
+        <input id="guessInput" list="songsList" name="song" autocomplete="off">
+        <datalist id="songsList"></datalist>
+        <button id="guessButton" disabled>guess</button>
+    </div>
+
+    <div hidden>
+        <div>
+            <iframe id="player" allow="autoplay" height="0" src="https://w.soundcloud.com/player/?url=https://soundcloud.com/rick-astley-official/never-gonna-give-you-up"></iframe>
+        </div>
+    </div>
+
+    <script src="https://w.soundcloud.com/player/api.js"></script>
+    <script>
+        let display = document.getElementById("display");
+        let guessCounter = document.getElementById("guessCounter");
+        let volumeSlider = document.getElementById("volumeSlider");
+        let skipButton = document.getElementById("skipButton");
+        let playButton = document.getElementById("playButton");
+        let songsList = document.getElementById("songsList");
+        let guessInput = document.getElementById("guessInput");
+        let guessButton = document.getElementById("guessButton");
+        let sc = SC.Widget('player');
+
+        let totalSeconds = [1, 2, 4, 7, 11, 16];
+        let currentGuess = 0;
+        let guesses = [null, null, null, null, null, null];
+        let songSet = (new URLSearchParams(window.location.search)).get('songs') || 'default';
+        var songs = [];
+        var song = {};
+
+        sc.bind(SC.Widget.Events.READY, () => {
+            playButton.disabled = false;
+            skipButton.disabled = false;
+            sc.setVolume(25);
+        });
+
+        let disableInputs = () => {
+            volumeSlider.disabled = true;
+            skipButton.disabled = true;
+            playButton.disabled = true;
+            guessInput.disabled = true;
+            guessButton.disabled = true;
+        };
+
+        let enableInputs = () => {
+            volumeSlider.disabled = false;
+            skipButton.disabled = false;
+            playButton.disabled = false;
+            guessInput.disabled = false;
+            guessButton.disabled = false;
+        };
+
+        let checkEndGame = () => {
+            if (currentGuess == 6) {
+                disableInputs();
+                display.innerHTML = song.string;
+                sc.pause();
+                sc.seekTo(0);
+                sc.play();
+            } else {
+                if (currentGuess == 5) {
+                    skipButton.innerHTML = 'skip';
+                } else {
+                    skipButton.innerHTML = `skip +${(totalSeconds[currentGuess+1] - totalSeconds[currentGuess])}s`;
+                }
+            }
+        }
+
+        let updateGuesses = () => {
+            var guessString = '';
+            guesses.forEach((guess) => {
+                if (guess === null) {
+                    guessString += ' ⬜️'
+                } else if (guess === true) {
+                    guessString += ' 🟩'
+                } else if (guess === false) {
+                    guessString += ' 🟥'
+                }
+            });
+            guessCounter.innerHTML = guessString;
+        };
+
+        volumeSlider.oninput = (e) => {
+            sc.setVolume(e.target.value);
+        };
+
+        skipButton.onclick = () => {
+            guesses[currentGuess++] = false;
+            updateGuesses();
+            checkEndGame();
+        };
+
+        playButton.onclick = () => {
+            disableInputs();
+            sc.play();
+
+            setTimeout(() => {
+                sc.pause();
+                sc.seekTo(0);
+                enableInputs();
+            }, (totalSeconds[currentGuess] * 1000));
+        };
+
+        fetch(`https://raw.githubusercontent.com/hubermjonathan/heardle/main/songs/${songSet}.json`)
+            .then(response => response.json())
+            .then((json) => {
+                songs = json.sort((a, b) => 0.5 - Math.random());
+                song = songs[Math.floor(Math.random() * songs.length)];
+                songs.forEach((song) => {
+                    let option = document.createElement('option');
+                    option.value = song.string;
+                    songsList.appendChild(option);
+                })
+                sc.load(song.url);
+            });
+
+        guessInput.oninput = (e) => {
+            if (songs.map(song => song.string).includes(guessInput.value)) {
+                guessButton.disabled = false;
+            } else {
+                guessButton.disabled = true;
+            }
+        };
+
+        guessButton.onclick = () => {
+            if (song.string === guessInput.value) {
+                guesses[currentGuess] = true;
+                currentGuess = 6;
+            } else {
+                guesses[currentGuess++] = false;
+                guessInput.value = '';
+                guessButton.disabled = true;
+            }
+
+            updateGuesses();
+            checkEndGame();
+        };
+    </script>
+</body>
+</html>
