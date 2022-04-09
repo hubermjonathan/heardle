@@ -39,6 +39,7 @@
     <div>
         <input id="volumeSlider" type="range" min="1" max="100" value="25">
         <button id="skipButton" disabled>skip +1s</button>
+        <button id="stopButton" disabled>stop</button>
         <button id="playButton" disabled>play</button>
     </div>
 
@@ -60,27 +61,29 @@
         let guessCounter = document.getElementById("guessCounter");
         let volumeSlider = document.getElementById("volumeSlider");
         let skipButton = document.getElementById("skipButton");
+        let stopButton = document.getElementById("stopButton");
         let playButton = document.getElementById("playButton");
         let songsList = document.getElementById("songsList");
         let guessInput = document.getElementById("guessInput");
         let guessButton = document.getElementById("guessButton");
         let sc = SC.Widget('player');
 
-        let totalSeconds = [1, 2, 4, 7, 11, 16];
+        let guesses = [];
         let currentGuess = 0;
-        let guesses = [null, null, null, null, null, null];
+        let score = [null, null, null, null, null, null];
+        let totalSeconds = [1, 2, 4, 7, 11, 16];
+        var playerTimeout = null;
         let songSet = (new URLSearchParams(window.location.search)).get('songs') || 'default';
         var songs = [];
         var song = {};
 
         sc.bind(SC.Widget.Events.READY, () => {
-            playButton.disabled = false;
             skipButton.disabled = false;
+            playButton.disabled = false;
             sc.setVolume(25);
         });
 
         let disableInputs = () => {
-            volumeSlider.disabled = true;
             skipButton.disabled = true;
             playButton.disabled = true;
             guessInput.disabled = true;
@@ -88,8 +91,8 @@
         };
 
         let enableInputs = () => {
-            volumeSlider.disabled = false;
             skipButton.disabled = false;
+            stopButton.disabled = false;
             playButton.disabled = false;
             guessInput.disabled = false;
             guessButton.disabled = false;
@@ -112,17 +115,22 @@
         }
 
         let updateGuesses = () => {
-            var guessString = '';
-            guesses.forEach((guess) => {
+            // display.innerHTML = '';
+            // guesses.forEach((guess) => {
+            //     display.innerHTML += `${guess}</br>`;
+            // });
+
+            var scoreString = '';
+            score.forEach((guess) => {
                 if (guess === null) {
-                    guessString += ' ⬜️'
+                    scoreString += ' ⬜️'
                 } else if (guess === true) {
-                    guessString += ' 🟩'
+                    scoreString += ' 🟩'
                 } else if (guess === false) {
-                    guessString += ' 🟥'
+                    scoreString += ' 🟥'
                 }
             });
-            guessCounter.innerHTML = guessString;
+            guessCounter.innerHTML = scoreString;
         };
 
         volumeSlider.oninput = (e) => {
@@ -130,19 +138,30 @@
         };
 
         skipButton.onclick = () => {
-            guesses[currentGuess++] = false;
+            guesses[currentGuess] = 'SKIPPED';
+            score[currentGuess++] = false;
             updateGuesses();
             checkEndGame();
         };
 
+        stopButton.onclick = () => {
+            clearTimeout(playerTimeout);
+            sc.pause();
+            sc.seekTo(0);
+            enableInputs();
+            stopButton.disabled = true;
+        };
+
         playButton.onclick = () => {
             disableInputs();
+            stopButton.disabled = false;
             sc.play();
 
-            setTimeout(() => {
+            playerTimeout = setTimeout(() => {
                 sc.pause();
                 sc.seekTo(0);
                 enableInputs();
+                stopButton.disabled = true;
             }, (totalSeconds[currentGuess] * 1000));
         };
 
@@ -159,7 +178,7 @@
                 sc.load(song.url);
             });
 
-        guessInput.oninput = (e) => {
+        guessInput.oninput = (e) => {            
             if (songs.map(song => song.string).includes(guessInput.value)) {
                 guessButton.disabled = false;
             } else {
@@ -168,11 +187,13 @@
         };
 
         guessButton.onclick = () => {
+            guesses[currentGuess] = guessInput.value;
+
             if (song.string === guessInput.value) {
-                guesses[currentGuess] = true;
+                score[currentGuess] = true;
                 currentGuess = 6;
             } else {
-                guesses[currentGuess++] = false;
+                score[currentGuess++] = false;
                 guessInput.value = '';
                 guessButton.disabled = true;
             }
